@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Reminders - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Payment Reminders ⏰</h1>
+            <p>Automate payment recovery via WhatsApp, Email, and manual notification tracking</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button onclick="openModal()" class="btn btn-primary btn-sm">+ Schedule Reminder</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- Overdue Invoices Alert Section -->
+        <div id="overdueSection" class="card" style="display: none; background: #fff1f2; border-color: #fecdd3;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div style="font-weight: 700; color: #9f1239; font-size: 1rem;">
+              ⚠️ Invoices Requiring Urgent Follow-up
+            </div>
+            <span class="badge badge-danger" id="overdueCountPill">0 Overdue</span>
+          </div>
+          <div id="overdueInvoicesList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <!-- Overdue items -->
+          </div>
+        </div>
+
+        <!-- Reminders Table -->
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+            <div style="display: flex; gap: 1rem; align-items: center;">
+              <select id="statusFilter" class="form-control" style="width: 170px;" onchange="filterReminders()">
+                <option value="">All Reminders</option>
+                <option value="PENDING">Pending</option>
+                <option value="SENT">Sent</option>
+                <option value="FAILED">Failed</option>
+              </select>
+              <select id="methodFilter" class="form-control" style="width: 170px;" onchange="filterReminders()">
+                <option value="">All Methods</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="EMAIL">Email</option>
+                <option value="MANUAL">Manual / Phone</option>
+              </select>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);" id="remindersCountText">
+              Loading reminders...
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Client</th>
+                  <th>Method</th>
+                  <th>Scheduled For</th>
+                  <th>Delivery Status</th>
+                  <th>Sent At</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="remindersTableBody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">Loading reminder schedules...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Reminder Modal -->
+  <div id="reminderModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Schedule Payment Reminder</h2>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="reminderForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="reminderInvoice">Select Unpaid Invoice *</label>
+            <select id="reminderInvoice" class="form-control" required onchange="updateMessagePreview()">
+              <option value="">Select Invoice</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label for="reminderMethod">Delivery Channel *</label>
+              <select id="reminderMethod" class="form-control" required onchange="updateMessagePreview()">
+                <option value="WHATSAPP">WhatsApp (Direct Link)</option>
+                <option value="EMAIL">Email Notification</option>
+                <option value="MANUAL">Manual Phone Log</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="scheduledFor">Scheduled Date *</label>
+              <input type="date" id="scheduledFor" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Auto-Generated Reminder Message Draft</label>
+            <div id="messagePreview" style="background: var(--surface-secondary); padding: 1rem; border-radius: var(--radius-md); font-size: 0.85rem; font-family: monospace; white-space: pre-wrap; color: var(--text-main); border: 1px solid var(--border);">
+              Select an invoice above to generate the message draft.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal()" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary">Schedule Reminder</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('reminders');
+
+    let allReminders = [];
+    let unpaidInvoices = [];
+
+    async function loadData() {
+      try {
+        const [remRes, invRes] = await Promise.all([
+          apiCall('/reminders'),
+          apiCall('/invoices')
+        ]);
+        allReminders = remRes.reminders || [];
+        const invoices = invRes.invoices || [];
+        unpaidInvoices = invoices.filter(i => i.status !== 'PAID' && i.status !== 'CANCELLED');
+
+        // Populate invoice select
+        const invSelect = document.getElementById('reminderInvoice');
+        invSelect.innerHTML = '<option value="">Select Invoice</option>' +
+          unpaidInvoices.map(i => `<option value="${i.id}">${i.invoiceNumber} - ${i.client?.name || 'Client'} (Due: ${formatDate(i.dueDate)} - Balance: ${formatCurrency(i.balance)})</option>`).join('');
+
+        // Identify overdue invoices
+        const now = new Date();
+        const overdue = unpaidInvoices.filter(i => i.status === 'OVERDUE' || (i.dueDate && new Date(i.dueDate) < now));
+        const overdueSec = document.getElementById('overdueSection');
+        if (overdue.length > 0) {
+          overdueSec.style.display = 'block';
+          document.getElementById('overdueCountPill').textContent = `${overdue.length} Overdue`;
+          document.getElementById('overdueInvoicesList').innerHTML = overdue.map(inv => `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 0.65rem 1rem; border-radius: 6px; border: 1px solid #fecdd3;">
+              <div>
+                <strong>${inv.invoiceNumber}</strong> &bull; ${inv.client?.name || 'Client'} &bull; Due: ${formatDate(inv.dueDate)}
+                <span style="color: #9f1239; font-weight: 700; margin-left: 0.5rem;">${formatCurrency(inv.balance)}</span>
+              </div>
+              <button onclick="quickSchedule('${inv.id}')" class="btn btn-danger btn-sm">Follow Up</button>
+            </div>
+          `).join('');
+        } else {
+          overdueSec.style.display = 'none';
+        }
+
+        renderReminders(allReminders);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function renderReminders(list) {
+      const tbody = document.getElementById('remindersTableBody');
+      document.getElementById('remindersCountText').textContent = `${list.length} reminder${list.length === 1 ? '' : 's'}`;
+
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">No payment reminders scheduled yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(r => {
+        const inv = r.invoice;
+        const statusBadge = r.status === 'SENT' ? 'badge-success' : r.status === 'FAILED' ? 'badge-danger' : 'badge-warning';
+        const methodBadge = r.method === 'WHATSAPP' ? 'badge-success' : r.method === 'EMAIL' ? 'badge-info' : 'badge-shield';
+
+        return `
+          <tr>
+            <td><strong>${inv ? inv.invoiceNumber : '-'}</strong></td>
+            <td>${inv?.client?.name || '-'}</td>
+            <td><span class="badge ${methodBadge}">${r.method}</span></td>
+            <td>${formatDate(r.scheduledFor)}</td>
+            <td><span class="badge ${statusBadge}">${r.status}</span></td>
+            <td>${r.sentAt ? formatDateTime(r.sentAt) : '-'}</td>
+            <td>
+              <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                ${r.status !== 'SENT' ? `
+                  <button onclick="sendReminderNow('${r.id}')" class="btn btn-primary btn-sm" title="Dispatch reminder now">
+                    🚀 Send
+                  </button>
+                ` : ''}
+                ${r.method === 'WHATSAPP' && inv ? `
+                  <button onclick="launchWhatsApp('${r.id}')" class="btn btn-outline btn-sm" style="color: #25D366; border-color: #25D366;" title="Open in WhatsApp">
+                    💬 Chat
+                  </button>
+                ` : ''}
+                <button onclick="deleteReminder('${r.id}')" class="btn btn-danger btn-sm" title="Delete reminder">&times;</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterReminders() {
+      const status = document.getElementById('statusFilter').value;
+      const method = document.getElementById('methodFilter').value;
+
+      let filtered = allReminders;
+      if (status) {
+        filtered = filtered.filter(r => r.status === status);
+      }
+      if (method) {
+        filtered = filtered.filter(r => r.method === method);
+      }
+      renderReminders(filtered);
+    }
+
+    function openModal() {
+      const modal = document.getElementById('reminderModal');
+      document.getElementById('reminderForm').reset();
+      document.getElementById('scheduledFor').value = new Date().toISOString().split('T')[0];
+      updateMessagePreview();
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('reminderModal').classList.remove('active');
+    }
+
+    function quickSchedule(invoiceId) {
+      openModal();
+      document.getElementById('reminderInvoice').value = invoiceId;
+      updateMessagePreview();
+    }
+
+    function updateMessagePreview() {
+      const invId = document.getElementById('reminderInvoice').value;
+      const method = document.getElementById('reminderMethod').value;
+      const preview = document.getElementById('messagePreview');
+
+      if (!invId) {
+        preview.textContent = 'Select an invoice above to generate the message draft.';
+        return;
+      }
+
+      const inv = unpaidInvoices.find(i => i.id === invId);
+      if (!inv) return;
+
+      const org = getOrganization() || { name: 'Our Company' };
+      const clientName = inv.client?.name || 'Valued Client';
+      const balance = formatCurrency(inv.balance);
+
+      if (method === 'WHATSAPP') {
+        preview.textContent = `Hello ${clientName},\nThis is a friendly payment reminder from ${org.name} regarding Invoice #${inv.invoiceNumber} with an outstanding balance of ${balance} (Due: ${formatDate(inv.dueDate)}).\nPlease process payment to ensure uninterrupted service & release of project deliverables.\nThank you!`;
+      } else if (method === 'EMAIL') {
+        preview.textContent = `Subject: Payment Reminder - Invoice #${inv.invoiceNumber} (${org.name})\n\nDear ${clientName},\n\nWe hope this email finds you well. This is a notification that invoice #${inv.invoiceNumber} has a pending balance of ${balance}, due on ${formatDate(inv.dueDate)}.\n\nKindly remit payment using your registered payment instructions.\n\nBest regards,\n${org.name} Accounts Team`;
+      } else {
+        preview.textContent = `Manual Follow-Up Log:\nCall/Meet ${clientName} regarding invoice #${inv.invoiceNumber} (${balance}). Verify payment date commitment.`;
+      }
+    }
+
+    async function saveReminder(e) {
+      e.preventDefault();
+      const payload = {
+        invoiceId: document.getElementById('reminderInvoice').value,
+        method: document.getElementById('reminderMethod').value,
+        scheduledFor: document.getElementById('scheduledFor').value,
+      };
+
+      try {
+        await apiCall('/reminders', 'POST', payload);
+        showToast('Payment reminder scheduled', 'success');
+        closeModal();
+        loadData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function sendReminderNow(id) {
+      try {
+        const res = await apiCall(`/reminders/${id}/send`, 'POST');
+        showToast('Reminder notification dispatched successfully!', 'success');
+        loadData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteReminder(id) {
+      if (!confirm('Delete this reminder?')) return;
+      try {
+        await apiCall(`/reminders/${id}`, 'DELETE');
+        showToast('Reminder removed', 'info');
+        loadData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function launchWhatsApp(id) {
+      const r = allReminders.find(x => x.id === id);
+      if (!r || !r.invoice) return;
+      const inv = r.invoice;
+      const org = getOrganization() || { name: 'Our Company' };
+      const clientName = inv.client?.name || 'Valued Client';
+      const balance = formatCurrency(inv.balance);
+      const text = `Hello ${clientName},\nThis is a friendly payment reminder from ${org.name} regarding Invoice #${inv.invoiceNumber} with an outstanding balance of ${balance} (Due: ${formatDate(inv.dueDate)}).\nPlease process payment to ensure uninterrupted service & release of project deliverables.\nThank you!`;
+      
+      let phone = (inv.client?.phone || '').replace(/[^0-9]/g, '');
+      const url = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+    }
+
+    document.getElementById('reminderForm').addEventListener('submit', saveReminder);
+    loadData();
+  </script>
+</body>
+</html>

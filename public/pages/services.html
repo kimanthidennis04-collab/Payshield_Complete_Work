@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Services - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Services & Catalog</h1>
+            <p>Manage billable services, consulting rates, and deliverables packages</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button onclick="openModal()" class="btn btn-primary btn-sm">+ Add Service</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <div class="card">
+          <div style="margin-bottom: 1.25rem;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search services..." style="max-width: 320px;" onkeyup="searchServices()">
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Service Name</th>
+                  <th>Description</th>
+                  <th>Standard Rate</th>
+                  <th>Currency</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="servicesTableBody">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading service catalog...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit Service Modal -->
+  <div id="serviceModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Add Service</h2>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="serviceForm">
+        <div class="modal-body">
+          <input type="hidden" id="serviceId">
+          <div class="form-group">
+            <label for="serviceName">Service / Product Name *</label>
+            <input type="text" id="serviceName" class="form-control" placeholder="e.g. Security Audit, Monthly Retainer" required>
+          </div>
+          <div class="form-group">
+            <label for="serviceDescription">Scope & Description</label>
+            <textarea id="serviceDescription" class="form-control" rows="3" placeholder="Deliverables and work specifications included..."></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label for="servicePrice">Base Unit Price *</label>
+              <input type="number" id="servicePrice" class="form-control" step="0.01" min="0" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label for="serviceCurrency">Currency</label>
+              <select id="serviceCurrency" class="form-control">
+                <option value="USD">USD</option>
+                <option value="KES">KES</option>
+                <option value="UGX">UGX</option>
+                <option value="TZS">TZS</option>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal()" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Service</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('services');
+
+    let allServices = [];
+
+    async function loadServices() {
+      try {
+        const result = await apiCall('/services');
+        allServices = result.services || [];
+        renderServices(allServices);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function renderServices(services) {
+      const tbody = document.getElementById('servicesTableBody');
+      if (!services || services.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No services listed yet. Click "Add Service" to create one.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = services.map(s => `
+        <tr>
+          <td><strong>${s.name}</strong></td>
+          <td>${s.description || '-'}</td>
+          <td><strong>${formatCurrency(s.price, s.currency)}</strong></td>
+          <td><span class="badge badge-info">${s.currency}</span></td>
+          <td>
+            <div style="display: flex; gap: 0.35rem;">
+              <button onclick="editService('${s.id}')" class="btn btn-outline btn-sm">Edit</button>
+              <button onclick="deleteService('${s.id}')" class="btn btn-danger btn-sm">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function searchServices() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allServices.filter(s =>
+        s.name.toLowerCase().includes(search) ||
+        (s.description && s.description.toLowerCase().includes(search))
+      );
+      renderServices(filtered);
+    }
+
+    function openModal(serviceId = null) {
+      const modal = document.getElementById('serviceModal');
+      const form = document.getElementById('serviceForm');
+      form.reset();
+      document.getElementById('serviceId').value = '';
+
+      const org = getOrganization();
+      if (org && org.currency) {
+        document.getElementById('serviceCurrency').value = org.currency;
+      }
+
+      if (serviceId) {
+        document.getElementById('modalTitle').textContent = 'Edit Service';
+        const service = allServices.find(s => s.id === serviceId);
+        if (service) {
+          document.getElementById('serviceId').value = service.id;
+          document.getElementById('serviceName').value = service.name;
+          document.getElementById('serviceDescription').value = service.description || '';
+          document.getElementById('servicePrice').value = service.price;
+          document.getElementById('serviceCurrency').value = service.currency;
+        }
+      } else {
+        document.getElementById('modalTitle').textContent = 'Add Service';
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('serviceModal').classList.remove('active');
+    }
+
+    async function saveService(e) {
+      e.preventDefault();
+      const id = document.getElementById('serviceId').value;
+      const data = {
+        name: document.getElementById('serviceName').value,
+        description: document.getElementById('serviceDescription').value || null,
+        price: parseFloat(document.getElementById('servicePrice').value),
+        currency: document.getElementById('serviceCurrency').value,
+      };
+
+      try {
+        if (id) {
+          await apiCall(`/services/${id}`, 'PUT', data);
+          showToast('Service updated', 'success');
+        } else {
+          await apiCall('/services', 'POST', data);
+          showToast('Service added to catalog', 'success');
+        }
+        closeModal();
+        loadServices();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function editService(id) {
+      openModal(id);
+    }
+
+    async function deleteService(id) {
+      if (!confirm('Are you sure you want to delete this service?')) return;
+      try {
+        await apiCall(`/services/${id}`, 'DELETE');
+        showToast('Service deleted', 'info');
+        loadServices();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    document.getElementById('serviceForm').addEventListener('submit', saveService);
+    loadServices();
+  </script>
+</body>
+</html>

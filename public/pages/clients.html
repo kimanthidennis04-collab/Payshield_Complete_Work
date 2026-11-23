@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clients - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Clients</h1>
+            <p>Manage customer directory, view billing histories and outstanding balances</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button onclick="openModal()" class="btn btn-primary btn-sm">+ Add Client</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <div class="card">
+          <div style="margin-bottom: 1.25rem;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search clients by name, email, or country..." style="max-width: 350px;" onkeyup="searchClients()">
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Client Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Country</th>
+                  <th>Invoices</th>
+                  <th>Quotes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="clientsTableBody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading clients...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit Client Modal -->
+  <div id="clientModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Add Client</h2>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="clientForm">
+        <div class="modal-body">
+          <input type="hidden" id="clientId">
+          <div class="form-group">
+            <label for="clientName">Full Name / Company Name *</label>
+            <input type="text" id="clientName" class="form-control" required placeholder="e.g. Acme Corp or Jane Doe">
+          </div>
+          <div class="form-group">
+            <label for="clientEmail">Email Address</label>
+            <input type="email" id="clientEmail" class="form-control" placeholder="contact@example.com">
+          </div>
+          <div class="form-group">
+            <label for="clientPhone">Phone Number</label>
+            <input type="text" id="clientPhone" class="form-control" placeholder="+254 700 000000">
+          </div>
+          <div class="form-group">
+            <label for="clientAddress">Billing Address</label>
+            <input type="text" id="clientAddress" class="form-control" placeholder="Street, City, Postal Code">
+          </div>
+          <div class="form-group">
+            <label for="clientCountry">Country</label>
+            <input type="text" id="clientCountry" class="form-control" placeholder="e.g. Kenya, USA">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal()" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Client</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Client Detail Modal -->
+  <div id="clientDetailModal" class="modal">
+    <div class="modal-content" style="max-width: 750px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="detailClientName">Client Profile & Ledger</h2>
+        <button onclick="closeDetailModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="clientDetailContent">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeDetailModal()" class="btn btn-primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('clients');
+
+    let allClients = [];
+
+    async function loadClients() {
+      try {
+        const result = await apiCall('/clients');
+        allClients = result.clients || [];
+        renderClients(allClients);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function renderClients(clients) {
+      const tbody = document.getElementById('clientsTableBody');
+      if (!clients || clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No clients found. Click "Add Client" to register one.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = clients.map(c => `
+        <tr>
+          <td><strong>${c.name}</strong></td>
+          <td>${c.email || '-'}</td>
+          <td>${c.phone || '-'}</td>
+          <td>${c.country || '-'}</td>
+          <td><span class="badge badge-info">${(c.invoices || []).length} issued</span></td>
+          <td><span class="badge badge-shield">${(c.quotes || []).length} quotes</span></td>
+          <td>
+            <div style="display: flex; gap: 0.35rem;">
+              <button onclick="viewClient('${c.id}')" class="btn btn-outline btn-sm">History</button>
+              <button onclick="editClient('${c.id}')" class="btn btn-outline btn-sm">Edit</button>
+              <button onclick="deleteClient('${c.id}')" class="btn btn-danger btn-sm">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function searchClients() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allClients.filter(c =>
+        c.name.toLowerCase().includes(search) ||
+        (c.email && c.email.toLowerCase().includes(search)) ||
+        (c.country && c.country.toLowerCase().includes(search))
+      );
+      renderClients(filtered);
+    }
+
+    function openModal(clientId = null) {
+      const modal = document.getElementById('clientModal');
+      const form = document.getElementById('clientForm');
+      form.reset();
+      document.getElementById('clientId').value = '';
+
+      if (clientId) {
+        document.getElementById('modalTitle').textContent = 'Edit Client';
+        const client = allClients.find(c => c.id === clientId);
+        if (client) {
+          document.getElementById('clientId').value = client.id;
+          document.getElementById('clientName').value = client.name;
+          document.getElementById('clientEmail').value = client.email || '';
+          document.getElementById('clientPhone').value = client.phone || '';
+          document.getElementById('clientAddress').value = client.address || '';
+          document.getElementById('clientCountry').value = client.country || '';
+        }
+      } else {
+        document.getElementById('modalTitle').textContent = 'Add Client';
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('clientModal').classList.remove('active');
+    }
+
+    async function saveClient(e) {
+      e.preventDefault();
+      const id = document.getElementById('clientId').value;
+      const data = {
+        name: document.getElementById('clientName').value,
+        email: document.getElementById('clientEmail').value || null,
+        phone: document.getElementById('clientPhone').value || null,
+        address: document.getElementById('clientAddress').value || null,
+        country: document.getElementById('clientCountry').value || null,
+      };
+
+      try {
+        if (id) {
+          await apiCall(`/clients/${id}`, 'PUT', data);
+          showToast('Client updated', 'success');
+        } else {
+          await apiCall('/clients', 'POST', data);
+          showToast('Client created', 'success');
+        }
+        closeModal();
+        loadClients();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function editClient(id) {
+      openModal(id);
+    }
+
+    async function deleteClient(id) {
+      if (!confirm('Are you sure you want to delete this client? Associated records will be safely cleaned.')) return;
+      try {
+        await apiCall(`/clients/${id}`, 'DELETE');
+        showToast('Client deleted', 'info');
+        loadClients();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function viewClient(id) {
+      try {
+        const result = await apiCall(`/clients/${id}`);
+        const c = result.client;
+        const cur = getOrganization()?.currency || 'USD';
+
+        let totalInvoiced = 0;
+        let totalPaid = 0;
+        (c.invoices || []).forEach(inv => {
+          totalInvoiced += inv.total;
+          const p = (inv.payments || []).reduce((s, x) => s + x.amount, 0);
+          totalPaid += p;
+        });
+        const balanceDue = totalInvoiced - totalPaid;
+
+        document.getElementById('detailClientName').textContent = `${c.name} — Financial History`;
+
+        let html = `
+          <div style="background: var(--surface-secondary); padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Client Details</div>
+              <div style="font-size: 1rem; font-weight: 700; margin-top: 0.25rem;">${c.name}</div>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">${c.email || 'No email registered'} &bull; ${c.phone || 'No phone'}</div>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">${c.address || ''} ${c.country ? `(${c.country})` : ''}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Account Standing</div>
+              <div style="font-size: 1.25rem; font-weight: 800; color: ${balanceDue > 0 ? 'var(--danger)' : 'var(--success)'}; margin-top: 0.25rem;">
+                Balance: ${formatCurrency(balanceDue, cur)}
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">Total Invoiced: ${formatCurrency(totalInvoiced, cur)} | Paid: ${formatCurrency(totalPaid, cur)}</div>
+            </div>
+          </div>
+
+          <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem;">Invoices (${c.invoices.length})</h3>
+          <div class="table-responsive" style="margin-bottom: 1.5rem;">
+            <table class="table">
+              <thead>
+                <tr><th>Invoice #</th><th>Status</th><th>Total</th><th>Paid</th><th>Balance</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                ${c.invoices.length === 0 ? '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No invoices</td></tr>' : 
+                  c.invoices.map(inv => {
+                    const paid = (inv.payments || []).reduce((s, p) => s + p.amount, 0);
+                    return `
+                      <tr>
+                        <td><strong>${inv.invoiceNumber}</strong></td>
+                        <td><span class="badge ${inv.status === 'PAID' ? 'badge-success' : 'badge-warning'}">${inv.status}</span></td>
+                        <td>${formatCurrency(inv.total, cur)}</td>
+                        <td style="color: var(--success);">${formatCurrency(paid, cur)}</td>
+                        <td style="font-weight: 700; color: ${inv.balance > 0 ? 'var(--danger)' : 'var(--success)'};">${formatCurrency(inv.balance, cur)}</td>
+                        <td>${inv.status !== 'PAID' ? `<a href="/payments?invoiceId=${inv.id}" class="btn btn-outline btn-sm">Pay</a>` : 'Settled'}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem;">Quotations (${c.quotes.length})</h3>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr><th>Quote #</th><th>Status</th><th>Total</th><th>Valid Until</th></tr>
+              </thead>
+              <tbody>
+                ${c.quotes.length === 0 ? '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No quotes</td></tr>' :
+                  c.quotes.map(q => `
+                    <tr>
+                      <td><strong>${q.quoteNumber}</strong></td>
+                      <td><span class="badge ${q.status === 'ACCEPTED' ? 'badge-success' : 'badge-info'}">${q.status}</span></td>
+                      <td>${formatCurrency(q.total, cur)}</td>
+                      <td>${formatDate(q.validUntil)}</td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        document.getElementById('clientDetailContent').innerHTML = html;
+        document.getElementById('clientDetailModal').classList.add('active');
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function closeDetailModal() {
+      document.getElementById('clientDetailModal').classList.remove('active');
+    }
+
+    document.getElementById('clientForm').addEventListener('submit', saveClient);
+    loadClients();
+  </script>
+</body>
+</html>

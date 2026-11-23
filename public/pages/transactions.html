@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transactions - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Transaction History Ledger</h1>
+            <p>Immutable audit trail of all payments, escrow deposits, and financial settlements</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <a href="/payments" class="btn btn-primary btn-sm">+ Record Payment</a>
+          <button onclick="loadTransactions()" class="btn btn-outline btn-sm">🔄 Refresh</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <div class="card">
+          <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by reference, source or type..." style="max-width: 320px;" onkeyup="filterTransactions()">
+            <select id="typeFilter" class="form-control" style="max-width: 200px;" onchange="filterTransactions()">
+              <option value="">All Transaction Types</option>
+              <option value="INVOICE_PAYMENT">Invoice Payment</option>
+              <option value="EXPENSE">Expense</option>
+              <option value="ESCROW_HOLD">Escrow Hold</option>
+              <option value="ESCROW_RELEASE">Escrow Release</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Transaction ID</th>
+                  <th>Type</th>
+                  <th>Source / Method</th>
+                  <th>Reference</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="transactionsTableBody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading transactions...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('transactions');
+
+    let allTransactions = [];
+
+    async function loadTransactions() {
+      try {
+        const result = await apiCall('/reports/transaction-history');
+        allTransactions = result.transactions || (result.report && result.report.transactions) || [];
+        renderTransactions(allTransactions);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function renderTransactions(transactions) {
+      const tbody = document.getElementById('transactionsTableBody');
+      if (!transactions || transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">No transactions recorded in the audit trail yet.</td></tr>';
+        return;
+      }
+
+      const cur = getOrganization()?.currency || 'USD';
+
+      tbody.innerHTML = transactions.map(t => {
+        const statusBadge = t.status === 'COMPLETED' ? 'badge-success' : t.status === 'FAILED' ? 'badge-danger' : 'badge-warning';
+        return `
+          <tr>
+            <td>${formatDateTime(t.createdAt)}</td>
+            <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">${t.id.substring(0, 13)}...</td>
+            <td><strong>${t.type}</strong></td>
+            <td><span class="badge badge-info">${t.source || '-'}</span></td>
+            <td style="font-family: monospace; font-size: 0.825rem;">${t.reference || '-'}</td>
+            <td style="font-weight: 700; color: var(--success);">+${formatCurrency(t.amount, t.currency || cur)}</td>
+            <td><span class="badge ${statusBadge}">${t.status}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterTransactions() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const type = document.getElementById('typeFilter').value;
+
+      let filtered = allTransactions;
+      if (q) {
+        filtered = filtered.filter(t =>
+          (t.reference && t.reference.toLowerCase().includes(q)) ||
+          (t.source && t.source.toLowerCase().includes(q)) ||
+          (t.type && t.type.toLowerCase().includes(q))
+        );
+      }
+      if (type) {
+        filtered = filtered.filter(t => t.type === type);
+      }
+      renderTransactions(filtered);
+    }
+
+    loadTransactions();
+  </script>
+</body>
+</html>

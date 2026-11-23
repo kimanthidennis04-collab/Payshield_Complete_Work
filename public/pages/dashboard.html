@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <nav id="appSidebar"></nav>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Executive Dashboard</h1>
+            <p>Real-time revenue, cash flow, and payment protection overview</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <a href="/invoices" class="btn btn-primary btn-sm">+ New Invoice</a>
+          <a href="/payments" class="btn btn-outline btn-sm">Record Payment</a>
+          <button onclick="loadDashboard()" class="btn btn-outline btn-sm" title="Refresh metrics">🔄 Refresh</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- Error & Retry Banner -->
+        <div id="errorBanner" style="display: none; margin-bottom: 1.5rem;" class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: var(--danger); font-weight: 600;" id="errorMessage">Unable to fetch dashboard metrics.</div>
+            <button onclick="loadDashboard()" class="btn btn-outline btn-sm">Try Again</button>
+          </div>
+        </div>
+
+        <!-- KPI Metrics Grid -->
+        <div class="dashboard-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Total Revenue</span>
+              <span class="stat-icon" style="background: #ecfdf5; color: #10b981;">💰</span>
+            </div>
+            <div class="stat-value" id="totalRevenue">Loading...</div>
+            <div class="stat-sub">Verified payments received</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Outstanding Balances</span>
+              <span class="stat-icon" style="background: #fffbeb; color: #f59e0b;">⏳</span>
+            </div>
+            <div class="stat-value" id="totalOutstanding" style="color: var(--warning);">Loading...</div>
+            <div class="stat-sub" id="outstandingInvoicesCount">- pending invoices</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Overdue Invoices</span>
+              <span class="stat-icon" style="background: #fef2f2; color: #ef4444;">🚨</span>
+            </div>
+            <div class="stat-value" id="overdueInvoices" style="color: var(--danger);">Loading...</div>
+            <div class="stat-sub">Requires reminder follow-up</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Collection Rate</span>
+              <span class="stat-icon" style="background: #eff6ff; color: #2563eb;">🎯</span>
+            </div>
+            <div class="stat-value" id="collectionRate">Loading...</div>
+            <div class="stat-sub" id="paidRatioText">Revenue vs issued billing</div>
+          </div>
+        </div>
+
+        <!-- Secondary Metrics Grid -->
+        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 2rem;">
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Total Clients</div>
+            <div class="stat-value" style="font-size: 1.35rem;" id="clientCount">-</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Total Invoices</div>
+            <div class="stat-value" style="font-size: 1.35rem;" id="invoiceCount">-</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Total Quotes</div>
+            <div class="stat-value" style="font-size: 1.35rem;" id="quoteCount">-</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Total Expenses</div>
+            <div class="stat-value" style="font-size: 1.35rem; color: var(--danger);" id="totalExpenses">-</div>
+          </div>
+          <div class="stat-card" style="padding: 1rem;">
+            <div class="stat-label">Net Cash Flow</div>
+            <div class="stat-value" style="font-size: 1.35rem;" id="netCashFlow">-</div>
+          </div>
+        </div>
+
+        <!-- Analytics & Quick Action Section -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Cash Flow & Collection Health</div>
+                <div class="card-subtitle">Real-time ledger analysis from SQLite database</div>
+              </div>
+            </div>
+            <div style="padding: 1rem 0;" id="healthBreakdown">
+              <div style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.35rem;">
+                  <span>Collected Revenue</span>
+                  <span id="collectedBarVal" style="font-weight: 700;">$0.00</span>
+                </div>
+                <div style="background: var(--surface-secondary); height: 10px; border-radius: var(--radius-full); overflow: hidden;">
+                  <div id="collectedBar" style="width: 0%; height: 100%; background: var(--success); transition: width 0.5s ease;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.35rem;">
+                  <span>Outstanding Receivables</span>
+                  <span id="outstandingBarVal" style="font-weight: 700; color: var(--warning);">$0.00</span>
+                </div>
+                <div style="background: var(--surface-secondary); height: 10px; border-radius: var(--radius-full); overflow: hidden;">
+                  <div id="outstandingBar" style="width: 0%; height: 100%; background: var(--warning); transition: width 0.5s ease;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Protection Services</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <a href="/deliverables" style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--surface-secondary); border-radius: var(--radius-md); text-decoration: none; color: inherit;">
+                <div>
+                  <div style="font-weight: 600; font-size: 0.875rem;">Deliverable Shield</div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted);">Protect files until paid</div>
+                </div>
+                <span class="badge badge-shield">Active</span>
+              </a>
+              <a href="/reminders" style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--surface-secondary); border-radius: var(--radius-md); text-decoration: none; color: inherit;">
+                <div>
+                  <div style="font-weight: 600; font-size: 0.875rem;">Payment Reminders</div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted);">Automated WhatsApp & Email</div>
+                </div>
+                <span class="badge badge-info">Ready</span>
+              </a>
+              <a href="/insights" style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--surface-secondary); border-radius: var(--radius-md); text-decoration: none; color: inherit;">
+                <div>
+                  <div style="font-weight: 600; font-size: 0.875rem;">AI Financial Insights</div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted);">Cash flow forecasting</div>
+                </div>
+                <span class="badge badge-success">Live</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Activity Tables -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 1.5rem;">
+          <!-- Recent Invoices -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recent Invoices</div>
+              <a href="/invoices" class="btn btn-outline btn-sm">View All</a>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Client</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="recentInvoicesBody">
+                  <tr><td colspan="4" style="text-align: center; color: var(--text-light); padding: 2rem;">Loading invoices...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Recent Payments -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recent Payments</div>
+              <a href="/payments" class="btn btn-outline btn-sm">View All</a>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Invoice #</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                  </tr>
+                </thead>
+                <tbody id="recentPaymentsBody">
+                  <tr><td colspan="4" style="text-align: center; color: var(--text-light); padding: 2rem;">Loading payments...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('dashboard');
+
+    async function loadDashboard() {
+      const errorBanner = document.getElementById('errorBanner');
+      errorBanner.style.display = 'none';
+
+      try {
+        const result = await apiCall('/dashboard/metrics');
+        if (!result || !result.metrics) {
+          throw new Error('Invalid metrics response from server');
+        }
+
+        const m = result.metrics;
+        const org = getOrganization();
+        const cur = org ? org.currency : 'USD';
+
+        // KPI values
+        document.getElementById('totalRevenue').textContent = formatCurrency(m.totalRevenue, cur);
+        document.getElementById('totalOutstanding').textContent = formatCurrency(m.totalOutstanding, cur);
+        document.getElementById('outstandingInvoicesCount').textContent = `${m.outstandingInvoices} outstanding (${m.pendingInvoices} pending)`;
+        document.getElementById('overdueInvoices').textContent = m.overdueInvoices;
+
+        // Collection Rate calculation
+        const totalBilled = m.totalRevenue + m.totalOutstanding;
+        let rate = 0;
+        if (totalBilled > 0) {
+          rate = Math.round((m.totalRevenue / totalBilled) * 100);
+        }
+        document.getElementById('collectionRate').textContent = `${rate}%`;
+        document.getElementById('paidRatioText').textContent = `${formatCurrency(m.totalRevenue, cur)} of ${formatCurrency(totalBilled, cur)}`;
+
+        // Progress bars
+        document.getElementById('collectedBarVal').textContent = formatCurrency(m.totalRevenue, cur);
+        document.getElementById('outstandingBarVal').textContent = formatCurrency(m.totalOutstanding, cur);
+        document.getElementById('collectedBar').style.width = `${rate}%`;
+        document.getElementById('outstandingBar').style.width = `${totalBilled > 0 ? 100 - rate : 0}%`;
+
+        // Secondary metrics
+        document.getElementById('clientCount').textContent = m.clientCount;
+        document.getElementById('invoiceCount').textContent = m.invoiceCount;
+        document.getElementById('quoteCount').textContent = m.quoteCount;
+        document.getElementById('totalExpenses').textContent = formatCurrency(m.totalExpenses, cur);
+        document.getElementById('netCashFlow').textContent = formatCurrency(m.netCashFlow, cur);
+        
+        const netEl = document.getElementById('netCashFlow');
+        if (m.netCashFlow > 0) {
+          netEl.style.color = 'var(--success)';
+        } else if (m.netCashFlow < 0) {
+          netEl.style.color = 'var(--danger)';
+        }
+
+        // Recent Invoices Table
+        const invBody = document.getElementById('recentInvoicesBody');
+        if (!m.recentInvoices || m.recentInvoices.length === 0) {
+          invBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No invoices issued yet.</td></tr>';
+        } else {
+          invBody.innerHTML = m.recentInvoices.map(inv => {
+            const badgeClass = inv.status === 'PAID' ? 'badge-success' : inv.status === 'OVERDUE' ? 'badge-danger' : inv.status === 'PARTIAL' ? 'badge-warning' : 'badge-info';
+            return `
+              <tr>
+                <td><strong>${inv.invoiceNumber}</strong></td>
+                <td>${inv.client ? inv.client.name : 'Unknown Client'}</td>
+                <td><strong>${formatCurrency(inv.total, cur)}</strong></td>
+                <td><span class="badge ${badgeClass}">${inv.status}</span></td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        // Recent Payments Table
+        const payBody = document.getElementById('recentPaymentsBody');
+        if (!m.recentPayments || m.recentPayments.length === 0) {
+          payBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No payments recorded yet.</td></tr>';
+        } else {
+          payBody.innerHTML = m.recentPayments.map(p => `
+            <tr>
+              <td>${formatDate(p.paidAt)}</td>
+              <td><strong>${p.invoice ? p.invoice.invoiceNumber : '-'}</strong></td>
+              <td style="color: var(--success); font-weight: 700;">+${formatCurrency(p.amount, cur)}</td>
+              <td><span class="badge badge-info">${p.method}</span></td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard:', err);
+        errorBanner.style.display = 'block';
+        document.getElementById('errorMessage').textContent = `Dashboard Load Error: ${err.message}`;
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

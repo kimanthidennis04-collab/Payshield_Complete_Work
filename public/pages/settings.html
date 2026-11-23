@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Organization & System Settings</h1>
+            <p>Manage workspace details, payment gateway webhooks, and team access</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- Organization Info Card -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <div class="card-header">
+            <div class="card-title">🏢 Organization Profile & Regional Settings</div>
+            <span class="badge badge-shield">Multi-Tenant Protected</span>
+          </div>
+          <form id="orgForm" onsubmit="handleOrgUpdate(event)" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;">
+            <div class="form-group">
+              <label class="form-label" for="editOrgName">Organization / Business Name</label>
+              <input type="text" id="editOrgName" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="editOrgCurrency">Base Currency</label>
+              <select id="editOrgCurrency" class="form-control">
+                <option value="KES">KES - Kenyan Shilling</option>
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="UGX">UGX - Ugandan Shilling</option>
+                <option value="TZS">TZS - Tanzanian Shilling</option>
+                <option value="ZAR">ZAR - South African Rand</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="editOrgCountry">Country</label>
+              <input type="text" id="editOrgCountry" class="form-control" placeholder="Kenya">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="editOrgTimezone">Timezone</label>
+              <select id="editOrgTimezone" class="form-control">
+                <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
+                <option value="UTC">UTC (Coordinated Universal Time)</option>
+                <option value="Europe/London">Europe/London (GMT/BST)</option>
+                <option value="America/New_York">America/New_York (EST/EDT)</option>
+                <option value="Asia/Dubai">Asia/Dubai (GST, UTC+4)</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1; display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn btn-primary btn-sm" id="saveOrgBtn">💾 Save Organization Settings</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- User Info & Password Change Card -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <div class="card-header">
+            <div class="card-title">👤 User Account & Password Management</div>
+            <button onclick="logout()" class="btn btn-outline btn-sm">Sign Out</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+            <!-- Profile Info -->
+            <form id="profileForm" onsubmit="handleProfileUpdate(event)">
+              <h4 style="margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text);">Account Profile</h4>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" for="editUserName">Full Name</label>
+                <input type="text" id="editUserName" class="form-control" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" for="editUserEmail">Email Address</label>
+                <input type="email" id="editUserEmail" class="form-control" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label">Role</label>
+                <div id="userRoleBadge"><span class="badge badge-success">OWNER</span></div>
+              </div>
+              <button type="submit" class="btn btn-outline btn-sm" id="saveProfileBtn">Update Profile</button>
+            </form>
+
+            <!-- Change Password -->
+            <form id="passwordForm" onsubmit="handlePasswordChange(event)" style="border-left: 1px solid var(--border-color); padding-left: 1.5rem;">
+              <h4 style="margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text);">Change Password</h4>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" for="currentPassword">Current Password</label>
+                <input type="password" id="currentPassword" class="form-control" placeholder="••••••••" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" for="newPassword">New Password (min 8 chars)</label>
+                <input type="password" id="newPassword" class="form-control" placeholder="••••••••" minlength="8" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" for="confirmPassword">Confirm New Password</label>
+                <input type="password" id="confirmPassword" class="form-control" placeholder="••••••••" minlength="8" required>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm" id="savePasswordBtn">🔒 Update Password</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Webhook Integration URLs -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <div class="card-header">
+            <div class="card-title">🔗 Webhook Endpoints & Payment Ingestion</div>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Provide these endpoints to your payment gateways (M-Pesa, Bank APIs, Stripe) to automatically record verified transactions into PayShield.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="background: var(--surface-secondary); padding: 0.75rem 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span class="badge badge-info" style="margin-right: 0.5rem;">POST</span>
+                <code style="font-weight: 600;">/api/webhooks/mpesa</code>
+              </div>
+              <small style="color: var(--text-muted);">M-Pesa C2B / Daraja STK Push Confirmation</small>
+            </div>
+            <div style="background: var(--surface-secondary); padding: 0.75rem 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span class="badge badge-info" style="margin-right: 0.5rem;">POST</span>
+                <code style="font-weight: 600;">/api/webhooks/bank</code>
+              </div>
+              <small style="color: var(--text-muted);">Direct Bank Credit Ingestion</small>
+            </div>
+            <div style="background: var(--surface-secondary); padding: 0.75rem 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span class="badge badge-info" style="margin-right: 0.5rem;">POST</span>
+                <code style="font-weight: 600;">/api/webhooks/card</code>
+              </div>
+              <small style="color: var(--text-muted);">Card Gateway Settlement Confirmation</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Infrastructure & Health Status -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🛠️ System & Database Status</div>
+            <span class="badge badge-success" id="systemHealthBadge">Verifying...</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+            <div style="background: var(--surface-secondary); padding: 1rem; border-radius: 6px;">
+              <small style="color: var(--text-muted);">Active Database</small>
+              <div style="font-weight: 700; margin-top: 0.25rem;">SQLite (dev.db)</div>
+              <small style="color: #10b981;">Connected & In-Sync</small>
+            </div>
+            <div style="background: var(--surface-secondary); padding: 1rem; border-radius: 6px;">
+              <small style="color: var(--text-muted);">Prisma Models</small>
+              <div style="font-weight: 700; margin-top: 0.25rem;">18 Registered Models</div>
+              <small style="color: var(--text-muted);">All relations mapped</small>
+            </div>
+            <div style="background: var(--surface-secondary); padding: 1rem; border-radius: 6px;">
+              <small style="color: var(--text-muted);">Environment</small>
+              <div style="font-weight: 700; margin-top: 0.25rem;">Local Antigravity Runtime</div>
+              <small style="color: var(--text-muted);">Port 3000</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('settings');
+
+    async function loadSettings() {
+      try {
+        const res = await apiCall('/auth/me');
+        const user = res.user;
+        const org = res.organization;
+
+        document.getElementById('editOrgName').value = org.name || '';
+        document.getElementById('editOrgCurrency').value = org.currency || 'KES';
+        document.getElementById('editOrgCountry').value = org.country || '';
+        document.getElementById('editOrgTimezone').value = org.timezone || 'Africa/Nairobi';
+
+        document.getElementById('editUserName').value = user.name || '';
+        document.getElementById('editUserEmail').value = user.email || '';
+        document.getElementById('userRoleBadge').innerHTML = `<span class="badge badge-success">${user.role}</span>`;
+
+        // Check health
+        const health = await apiCall('/health');
+        if (health && health.success && health.database === 'connected') {
+          document.getElementById('systemHealthBadge').textContent = 'Healthy & Connected';
+          document.getElementById('systemHealthBadge').className = 'badge badge-success';
+        } else {
+          document.getElementById('systemHealthBadge').textContent = 'Degraded';
+          document.getElementById('systemHealthBadge').className = 'badge badge-danger';
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function handleOrgUpdate(e) {
+      e.preventDefault();
+      const btn = document.getElementById('saveOrgBtn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        const payload = {
+          name: document.getElementById('editOrgName').value,
+          currency: document.getElementById('editOrgCurrency').value,
+          country: document.getElementById('editOrgCountry').value,
+          timezone: document.getElementById('editOrgTimezone').value,
+        };
+        const res = await apiCall('/auth/organization', 'PUT', payload);
+        if (res.success) {
+          showToast('Organization settings updated successfully!', 'success');
+          // Update cached organization in localStorage
+          const cachedOrg = getOrganization() || {};
+          Object.assign(cachedOrg, res.organization);
+          localStorage.setItem('organization', JSON.stringify(cachedOrg));
+          // Refresh sidebar badge
+          initAppShell('settings');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 Save Organization Settings';
+      }
+    }
+
+    async function handleProfileUpdate(e) {
+      e.preventDefault();
+      const btn = document.getElementById('saveProfileBtn');
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      try {
+        const payload = {
+          name: document.getElementById('editUserName').value,
+          email: document.getElementById('editUserEmail').value,
+        };
+        const res = await apiCall('/auth/profile', 'PUT', payload);
+        if (res.success) {
+          showToast('Profile updated successfully!', 'success');
+          const cachedUser = getUser() || {};
+          Object.assign(cachedUser, res.user);
+          localStorage.setItem('user', JSON.stringify(cachedUser));
+          initAppShell('settings');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update Profile';
+      }
+    }
+
+    async function handlePasswordChange(e) {
+      e.preventDefault();
+      const cur = document.getElementById('currentPassword').value;
+      const nw = document.getElementById('newPassword').value;
+      const cnf = document.getElementById('confirmPassword').value;
+
+      if (nw !== cnf) {
+        showToast('New passwords do not match!', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('savePasswordBtn');
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+
+      try {
+        const res = await apiCall('/auth/password', 'PUT', { currentPassword: cur, newPassword: nw });
+        if (res.success) {
+          showToast('Password changed successfully! Keep it safe.', 'success');
+          document.getElementById('passwordForm').reset();
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔒 Update Password';
+      }
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

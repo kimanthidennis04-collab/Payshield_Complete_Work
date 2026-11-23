@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payments - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Payment Ledger</h1>
+            <p>Verified transaction records, partial payments, and invoice reconciliation</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button onclick="openModal()" class="btn btn-primary btn-sm">+ Record Payment</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <div class="card">
+          <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by reference, client or invoice..." style="max-width: 320px;" onkeyup="filterPayments()">
+            <select id="methodFilter" class="form-control" style="max-width: 180px;" onchange="filterPayments()">
+              <option value="">All Payment Methods</option>
+              <option value="BANK_TRANSFER">Bank Transfer</option>
+              <option value="MOBILE_MONEY">Mobile Money (M-Pesa)</option>
+              <option value="CARD">Credit/Debit Card</option>
+              <option value="CASH">Cash</option>
+              <option value="CHECK">Check</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Payment Date</th>
+                  <th>Invoice #</th>
+                  <th>Client</th>
+                  <th>Amount</th>
+                  <th>Channel / Method</th>
+                  <th>Reference</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="paymentsTableBody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading payment records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Record Payment Modal -->
+  <div id="paymentModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Record Verified Payment</h2>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="paymentForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="paymentInvoice">Invoice to Credit *</label>
+            <select id="paymentInvoice" class="form-control" required onchange="loadInvoiceDetails()">
+              <option value="">Select Invoice</option>
+            </select>
+            <div id="balanceHint" style="font-size: 0.8rem; font-weight: 600; color: var(--primary); margin-top: 0.25rem;"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="paymentAmount">Amount Paid *</label>
+            <input type="number" id="paymentAmount" class="form-control" step="0.01" min="0.01" required placeholder="0.00">
+            <small style="color: var(--text-muted); font-size: 0.75rem;">Supports partial or full settlement. Invoice balance updates in real-time.</small>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label for="paymentMethod">Payment Method *</label>
+              <select id="paymentMethod" class="form-control" required>
+                <option value="BANK_TRANSFER">Bank Transfer (EFT/RTGS)</option>
+                <option value="MOBILE_MONEY">Mobile Money (M-Pesa)</option>
+                <option value="CARD">Credit/Debit Card</option>
+                <option value="CASH">Cash</option>
+                <option value="CHECK">Check</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="paymentProvider">Settlement Provider</label>
+              <select id="paymentProvider" class="form-control">
+                <option value="BANK">Bank Direct</option>
+                <option value="MPESA">M-Pesa Express</option>
+                <option value="CARD">Card Processing</option>
+                <option value="STRIPE">Stripe</option>
+                <option value="PAYPAL">PayPal</option>
+                <option value="OTHER">Manual / Offline</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label for="paymentReference">Transaction Reference / Receipt #</label>
+              <input type="text" id="paymentReference" class="form-control" placeholder="e.g. MPESA-QHD8932 or CHK-4001">
+            </div>
+            <div class="form-group">
+              <label for="paymentDate">Payment Date</label>
+              <input type="date" id="paymentDate" class="form-control">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal()" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary">Confirm & Update Ledger</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('payments');
+
+    let allPayments = [];
+    let allInvoices = [];
+
+    async function loadData() {
+      try {
+        const [payRes, invRes] = await Promise.all([
+          apiCall('/payments'),
+          apiCall('/invoices'),
+        ]);
+        allPayments = payRes.payments || [];
+        allInvoices = invRes.invoices || [];
+
+        const pendingInvoices = allInvoices.filter(i => i.status !== 'PAID' && i.status !== 'CANCELLED');
+        const invoiceSelect = document.getElementById('paymentInvoice');
+        invoiceSelect.innerHTML = '<option value="">Select Invoice</option>' +
+          pendingInvoices.map(i => {
+            return `<option value="${i.id}">${i.invoiceNumber} - ${i.client?.name || 'Client'} (Balance: ${formatCurrency(i.balance, i.currency)})</option>`;
+          }).join('');
+
+        renderPayments(allPayments);
+
+        // Pre-select if URL has invoiceId
+        const urlParams = new URLSearchParams(window.location.search);
+        const presetInvoiceId = urlParams.get('invoiceId');
+        if (presetInvoiceId) {
+          openModal();
+          invoiceSelect.value = presetInvoiceId;
+          loadInvoiceDetails();
+        }
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function renderPayments(payments) {
+      const tbody = document.getElementById('paymentsTableBody');
+      if (!payments || payments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No verified payments recorded. Click "Record Payment" to log one.</td></tr>';
+        return;
+      }
+
+      const cur = getOrganization()?.currency || 'USD';
+
+      tbody.innerHTML = payments.map(p => {
+        const inv = p.invoice;
+        const client = inv ? inv.client : null;
+        const statusBadge = p.status === 'COMPLETED' ? 'badge-success' : p.status === 'FAILED' ? 'badge-danger' : 'badge-warning';
+
+        return `
+          <tr>
+            <td>${formatDate(p.paidAt)}</td>
+            <td><strong>${inv ? inv.invoiceNumber : '-'}</strong></td>
+            <td>${client ? client.name : '-'}</td>
+            <td style="color: var(--success); font-weight: 700;">+${formatCurrency(p.amount, p.currency || cur)}</td>
+            <td><span class="badge badge-info">${p.method}</span> <small style="color: var(--text-muted);">(${p.provider})</small></td>
+            <td style="font-family: monospace; font-size: 0.8rem;">${p.reference || '-'}</td>
+            <td><span class="badge ${statusBadge}">${p.status}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterPayments() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const method = document.getElementById('methodFilter').value;
+
+      let filtered = allPayments;
+      if (q) {
+        filtered = filtered.filter(p =>
+          (p.reference && p.reference.toLowerCase().includes(q)) ||
+          (p.invoice && p.invoice.invoiceNumber.toLowerCase().includes(q)) ||
+          (p.invoice?.client && p.invoice.client.name.toLowerCase().includes(q))
+        );
+      }
+      if (method) {
+        filtered = filtered.filter(p => p.method === method);
+      }
+      renderPayments(filtered);
+    }
+
+    function openModal() {
+      const modal = document.getElementById('paymentModal');
+      document.getElementById('paymentForm').reset();
+      document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('balanceHint').textContent = '';
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('paymentModal').classList.remove('active');
+    }
+
+    function loadInvoiceDetails() {
+      const invoiceId = document.getElementById('paymentInvoice').value;
+      const hint = document.getElementById('balanceHint');
+
+      if (!invoiceId) {
+        hint.textContent = '';
+        return;
+      }
+
+      const invoice = allInvoices.find(i => i.id === invoiceId);
+      if (invoice) {
+        hint.textContent = `Outstanding Balance Due: ${formatCurrency(invoice.balance, invoice.currency)}`;
+        document.getElementById('paymentAmount').value = invoice.balance > 0 ? invoice.balance.toFixed(2) : '0.00';
+      }
+    }
+
+    async function savePayment(e) {
+      e.preventDefault();
+
+      const data = {
+        invoiceId: document.getElementById('paymentInvoice').value,
+        amount: parseFloat(document.getElementById('paymentAmount').value),
+        method: document.getElementById('paymentMethod').value,
+        provider: document.getElementById('paymentProvider').value,
+        reference: document.getElementById('paymentReference').value || null,
+        paidAt: document.getElementById('paymentDate').value || null,
+      };
+
+      try {
+        await apiCall('/payments', 'POST', data);
+        showToast('Payment credited to invoice & recorded in ledger!', 'success');
+        closeModal();
+        loadData();
+      } catch (error) {
+        showToast('Error recording payment: ' + error.message, 'error');
+      }
+    }
+
+    document.getElementById('paymentForm').addEventListener('submit', savePayment);
+    loadData();
+  </script>
+</body>
+</html>

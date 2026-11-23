@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cash Flow - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Cash Flow Analytics</h1>
+            <p>Net operational cash flow, verified collections vs expenses, and working capital</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button onclick="loadCashFlow()" class="btn btn-outline btn-sm">🔄 Recalculate</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- Date Filter Card -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0; min-width: 180px;">
+              <label for="startDate">Period Start Date</label>
+              <input type="date" id="startDate" class="form-control">
+            </div>
+            <div class="form-group" style="margin: 0; min-width: 180px;">
+              <label for="endDate">Period End Date</label>
+              <input type="date" id="endDate" class="form-control">
+            </div>
+            <button onclick="loadCashFlow()" class="btn btn-primary" style="margin-bottom: 1px;">Apply Period</button>
+            <button onclick="setDateRange(30)" class="btn btn-outline btn-sm">Last 30 Days</button>
+            <button onclick="setDateRange(90)" class="btn btn-outline btn-sm">Last 90 Days</button>
+            <button onclick="setDateRange(365)" class="btn btn-outline btn-sm">This Year</button>
+          </div>
+        </div>
+
+        <!-- Cash Flow KPIs -->
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <div class="stat-label">Cash Inflow (Received)</div>
+            <div class="stat-value" id="moneyReceived" style="color: var(--success);">-</div>
+            <div class="stat-sub">Verified payments settled</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Cash Outflow (Expenses)</div>
+            <div class="stat-value" id="totalExpenses" style="color: var(--danger);">-</div>
+            <div class="stat-sub">Operating expenditures</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Outstanding Receivables</div>
+            <div class="stat-value" id="outstandingReceivables" style="color: var(--warning);">-</div>
+            <div class="stat-sub">Pending client billing</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Net Operating Cash Flow</div>
+            <div class="stat-value" id="netCashFlow">-</div>
+            <div class="stat-sub" id="netMarginText">Inflow minus outflow</div>
+          </div>
+        </div>
+
+        <!-- Cash Flow Comparison Breakdown Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Cash Position Breakdown</div>
+          </div>
+          <div style="padding: 1rem 0;">
+            <div style="margin-bottom: 1.5rem;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                <span>Verified Cash Inflow</span>
+                <span id="inflowText" style="font-weight: 700; color: var(--success);">$0.00</span>
+              </div>
+              <div style="background: var(--surface-secondary); height: 12px; border-radius: var(--radius-full); overflow: hidden;">
+                <div id="inflowBar" style="width: 0%; height: 100%; background: var(--success); transition: width 0.5s;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                <span>Total Cash Outflow</span>
+                <span id="outflowText" style="font-weight: 700; color: var(--danger);">$0.00</span>
+              </div>
+              <div style="background: var(--surface-secondary); height: 12px; border-radius: var(--radius-full); overflow: hidden;">
+                <div id="outflowBar" style="width: 0%; height: 100%; background: var(--danger); transition: width 0.5s;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('cashflow');
+
+    function setDateRange(days) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - days);
+
+      document.getElementById('startDate').value = start.toISOString().split('T')[0];
+      document.getElementById('endDate').value = end.toISOString().split('T')[0];
+      loadCashFlow();
+    }
+
+    function initDates() {
+      const end = new Date();
+      const start = new Date();
+      start.setMonth(start.getMonth() - 1);
+
+      document.getElementById('startDate').value = start.toISOString().split('T')[0];
+      document.getElementById('endDate').value = end.toISOString().split('T')[0];
+    }
+
+    async function loadCashFlow() {
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      try {
+        const result = await apiCall(`/dashboard/cashflow?startDate=${startDate}&endDate=${endDate}`);
+        const c = result.cashFlow;
+        const cur = getOrganization()?.currency || 'USD';
+
+        document.getElementById('moneyReceived').textContent = formatCurrency(c.moneyReceived, cur);
+        document.getElementById('totalExpenses').textContent = formatCurrency(c.totalExpenses, cur);
+        document.getElementById('outstandingReceivables').textContent = formatCurrency(c.outstandingReceivables, cur);
+        document.getElementById('netCashFlow').textContent = formatCurrency(c.netCashFlow, cur);
+
+        const netEl = document.getElementById('netCashFlow');
+        if (c.netCashFlow > 0) {
+          netEl.style.color = 'var(--success)';
+        } else if (c.netCashFlow < 0) {
+          netEl.style.color = 'var(--danger)';
+        }
+
+        const totalVol = c.moneyReceived + c.totalExpenses;
+        const inPct = totalVol > 0 ? (c.moneyReceived / totalVol) * 100 : 0;
+        const outPct = totalVol > 0 ? (c.totalExpenses / totalVol) * 100 : 0;
+
+        document.getElementById('inflowText').textContent = formatCurrency(c.moneyReceived, cur);
+        document.getElementById('outflowText').textContent = formatCurrency(c.totalExpenses, cur);
+        document.getElementById('inflowBar').style.width = `${inPct}%`;
+        document.getElementById('outflowBar').style.width = `${outPct}%`;
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    initDates();
+    loadCashFlow();
+  </script>
+</body>
+</html>

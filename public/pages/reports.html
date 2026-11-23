@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Financial Reports</h1>
+            <p>Comprehensive audit logs, revenue analytics, client balances, and ledgers</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- Report Selector Tabs -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.75rem;">
+            Select Statement or Ledger
+          </div>
+          <div style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+            <button onclick="switchReport('revenue')" class="btn btn-outline btn-sm report-tab active" id="tab-revenue">📊 Revenue</button>
+            <button onclick="switchReport('payments')" class="btn btn-outline btn-sm report-tab" id="tab-payments">💳 Payments</button>
+            <button onclick="switchReport('outstanding')" class="btn btn-outline btn-sm report-tab" id="tab-outstanding">⏳ Outstanding</button>
+            <button onclick="switchReport('overdue')" class="btn btn-outline btn-sm report-tab" id="tab-overdue">🚨 Overdue</button>
+            <button onclick="switchReport('expenses')" class="btn btn-outline btn-sm report-tab" id="tab-expenses">📉 Expenses</button>
+            <button onclick="switchReport('balances')" class="btn btn-outline btn-sm report-tab" id="tab-balances">👥 Client Balances</button>
+            <button onclick="switchReport('transactions')" class="btn btn-outline btn-sm report-tab" id="tab-transactions">📑 Transactions</button>
+          </div>
+        </div>
+
+        <!-- Date Range Filter -->
+        <div class="card" id="dateFilterCard" style="display: none; margin-bottom: 1.5rem;">
+          <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0; min-width: 170px;">
+              <label for="reportStartDate">Start Date</label>
+              <input type="date" id="reportStartDate" class="form-control">
+            </div>
+            <div class="form-group" style="margin: 0; min-width: 170px;">
+              <label for="reportEndDate">End Date</label>
+              <input type="date" id="reportEndDate" class="form-control">
+            </div>
+            <button onclick="fetchReport()" class="btn btn-primary" style="margin-bottom: 1px;">Update Report</button>
+          </div>
+        </div>
+
+        <!-- Report Content Card -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="reportTitle">Loading report...</div>
+              <div class="card-subtitle" id="reportSubtitle">Real database records</div>
+            </div>
+            <div id="reportActions">
+              <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Print</button>
+            </div>
+          </div>
+          <div class="table-responsive" id="reportTableContainer">
+            <!-- Dynamic table contents -->
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('reports');
+
+    let currentReport = 'revenue';
+
+    function initDates() {
+      const end = new Date();
+      const start = new Date();
+      start.setMonth(start.getMonth() - 1);
+
+      document.getElementById('reportStartDate').value = start.toISOString().split('T')[0];
+      document.getElementById('reportEndDate').value = end.toISOString().split('T')[0];
+    }
+
+    function switchReport(type) {
+      currentReport = type;
+      document.querySelectorAll('.report-tab').forEach(b => b.classList.remove('active', 'btn-primary'));
+      document.querySelectorAll('.report-tab').forEach(b => b.classList.add('btn-outline'));
+
+      const activeBtn = document.getElementById(`tab-${type}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('btn-outline');
+        activeBtn.classList.add('active', 'btn-primary');
+      }
+
+      const dateCard = document.getElementById('dateFilterCard');
+      const needsDates = ['revenue', 'payments', 'expenses', 'transactions'].includes(type);
+      dateCard.style.display = needsDates ? 'block' : 'none';
+
+      fetchReport();
+    }
+
+    async function fetchReport() {
+      const startDate = document.getElementById('reportStartDate').value;
+      const endDate = document.getElementById('reportEndDate').value;
+      const cur = getOrganization()?.currency || 'USD';
+      const container = document.getElementById('reportTableContainer');
+      const title = document.getElementById('reportTitle');
+
+      container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Querying database...</div>';
+
+      try {
+        let endpoint = `/reports/${currentReport}`;
+        if (['revenue', 'payments', 'expenses', 'transactions'].includes(currentReport)) {
+          endpoint += `?startDate=${startDate}&endDate=${endDate}`;
+        }
+
+        const data = await apiCall(endpoint);
+
+        if (currentReport === 'revenue') {
+          title.textContent = 'Revenue Summary Report';
+          const r = data.revenue || {};
+          const paymentList = r.payments || r.transactions || [];
+          container.innerHTML = `
+            <div style="background: var(--surface-secondary); padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; gap: 2rem;">
+              <div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Total Revenue Collected</div>
+                <div style="font-size: 1.5rem; font-weight: 800; color: var(--success);">${formatCurrency(r.totalRevenue || 0, cur)}</div>
+              </div>
+              <div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Payment Transactions</div>
+                <div style="font-size: 1.5rem; font-weight: 800;">${r.paymentCount !== undefined ? r.paymentCount : paymentList.length}</div>
+              </div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Date</th><th>Invoice #</th><th>Client</th><th>Amount</th><th>Method</th></tr></thead>
+              <tbody>
+                ${paymentList.length === 0 ? '<tr><td colspan="5" style="text-align: center;">No payments in this period.</td></tr>' :
+                  paymentList.map(p => `
+                    <tr>
+                      <td>${formatDate(p.paidAt)}</td>
+                      <td><strong>${p.invoice?.invoiceNumber || '-'}</strong></td>
+                      <td>${p.invoice?.client?.name || '-'}</td>
+                      <td style="color: var(--success); font-weight: 700;">${formatCurrency(p.amount, cur)}</td>
+                      <td>${p.method}</td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else if (currentReport === 'payments') {
+          title.textContent = 'Payment Reconciliation Report';
+          const pList = data.payments || (data.report && data.report.payments) || [];
+          container.innerHTML = `
+            <table class="table">
+              <thead><tr><th>Date</th><th>Invoice #</th><th>Client</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th></tr></thead>
+              <tbody>
+                ${pList.length === 0 ? '<tr><td colspan="7" style="text-align: center;">No payment records found.</td></tr>' :
+                  pList.map(p => `
+                    <tr>
+                      <td>${formatDate(p.paidAt)}</td>
+                      <td><strong>${p.invoice?.invoiceNumber || '-'}</strong></td>
+                      <td>${p.invoice?.client?.name || '-'}</td>
+                      <td style="font-weight: 700;">${formatCurrency(p.amount, cur)}</td>
+                      <td>${p.method}</td>
+                      <td>${p.reference || '-'}</td>
+                      <td><span class="badge ${p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}">${p.status}</span></td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else if (currentReport === 'outstanding') {
+          title.textContent = 'Outstanding Receivables Report';
+          const r = data.outstanding || {};
+          const invoiceList = r.invoices || [];
+          container.innerHTML = `
+            <div style="background: var(--surface-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; gap: 2rem;">
+              <div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Total Outstanding Balance</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: var(--warning);">${formatCurrency(r.totalOutstanding || 0, cur)}</div>
+              </div>
+              <div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Unsettled Invoices</div>
+                <div style="font-size: 1.35rem; font-weight: 800;">${r.invoiceCount !== undefined ? r.invoiceCount : invoiceList.length}</div>
+              </div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Invoice #</th><th>Client</th><th>Total</th><th>Paid</th><th>Outstanding Balance</th><th>Due Date</th></tr></thead>
+              <tbody>
+                ${invoiceList.length === 0 ? '<tr><td colspan="6" style="text-align: center;">No outstanding invoices.</td></tr>' :
+                  invoiceList.map(i => {
+                    const paid = i.amountPaid !== undefined ? i.amountPaid : ((i.payments || []).reduce((s, p) => s + p.amount, 0));
+                    const balance = i.balance !== undefined ? i.balance : (i.total - paid);
+                    return `
+                      <tr>
+                        <td><strong>${i.invoiceNumber}</strong></td>
+                        <td>${i.client?.name || (typeof i.client === 'string' ? i.client : '-')}</td>
+                        <td>${formatCurrency(i.total, cur)}</td>
+                        <td style="color: var(--success);">${formatCurrency(paid, cur)}</td>
+                        <td style="color: var(--danger); font-weight: 700;">${formatCurrency(balance, cur)}</td>
+                        <td>${formatDate(i.dueDate)}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+              </tbody>
+            </table>
+          `;
+        } else if (currentReport === 'overdue') {
+          title.textContent = 'Overdue Invoices Recovery Report';
+          const r = data.overdue || {};
+          const invoiceList = r.invoices || [];
+          container.innerHTML = `
+            <div style="background: #fff1f2; border: 1px solid #fecdd3; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; gap: 2rem;">
+              <div>
+                <div style="font-size: 0.8rem; color: #9f1239;">Total Overdue Debt</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: #e11d48;">${formatCurrency(r.totalOverdue || 0, cur)}</div>
+              </div>
+              <div>
+                <div style="font-size: 0.8rem; color: #9f1239;">Overdue Invoices</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: #e11d48;">${r.invoiceCount !== undefined ? r.invoiceCount : invoiceList.length}</div>
+              </div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Invoice #</th><th>Client</th><th>Total</th><th>Balance Due</th><th>Due Date</th><th>Action</th></tr></thead>
+              <tbody>
+                ${invoiceList.length === 0 ? '<tr><td colspan="6" style="text-align: center;">No overdue invoices. Outstanding collections are current.</td></tr>' :
+                  invoiceList.map(i => `
+                    <tr>
+                      <td><strong>${i.invoiceNumber}</strong></td>
+                      <td>${i.client?.name || (typeof i.client === 'string' ? i.client : '-')}</td>
+                      <td>${formatCurrency(i.total, cur)}</td>
+                      <td style="color: var(--danger); font-weight: 700;">${formatCurrency(i.balance, cur)}</td>
+                      <td style="color: var(--danger);">${formatDate(i.dueDate)}</td>
+                      <td><a href="/reminders" class="btn btn-danger btn-sm">Send Reminder</a></td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else if (currentReport === 'expenses') {
+          title.textContent = 'Expenses Audit Report';
+          const r = data.expenses || {};
+          const expenseList = r.expenses || [];
+          container.innerHTML = `
+            <div style="background: var(--surface-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; gap: 2rem;">
+              <div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Total Operational Expenditures</div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: var(--danger);">${formatCurrency(r.totalExpenses || 0, cur)}</div>
+              </div>
+              <div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Entries</div>
+                <div style="font-size: 1.35rem; font-weight: 800;">${r.expenseCount !== undefined ? r.expenseCount : expenseList.length}</div>
+              </div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead>
+              <tbody>
+                ${expenseList.length === 0 ? '<tr><td colspan="4" style="text-align: center;">No expenses recorded in this period.</td></tr>' :
+                  expenseList.map(e => `
+                    <tr>
+                      <td>${formatDate(e.date)}</td>
+                      <td><span class="badge badge-info">${e.category}</span></td>
+                      <td>${e.description}</td>
+                      <td style="color: var(--danger); font-weight: 700;">-${formatCurrency(e.amount, e.currency || cur)}</td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else if (currentReport === 'balances') {
+          title.textContent = 'Client Balances & Accounts Receivable';
+          const r = data.balances || [];
+          container.innerHTML = `
+            <table class="table">
+              <thead><tr><th>Client Name</th><th>Total Invoiced</th><th>Total Paid</th><th>Outstanding Balance</th></tr></thead>
+              <tbody>
+                ${r.length === 0 ? '<tr><td colspan="4" style="text-align: center;">No client balances.</td></tr>' :
+                  r.map(b => `
+                    <tr>
+                      <td><strong>${b.clientName || (b.client ? b.client.name : 'Client')}</strong></td>
+                      <td>${formatCurrency(b.totalInvoiced || b.totalPaid + (b.totalBalance || 0), cur)}</td>
+                      <td style="color: var(--success);">${formatCurrency(b.totalPaid || 0, cur)}</td>
+                      <td style="font-weight: 700; color: ${(b.totalBalance || b.balance || 0) > 0 ? 'var(--danger)' : 'var(--success)'};">${formatCurrency(b.totalBalance !== undefined ? b.totalBalance : (b.balance || 0), cur)}</td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else if (currentReport === 'transactions') {
+          title.textContent = 'Transaction History Ledger';
+          const r = data.transactions || [];
+          container.innerHTML = `
+            <table class="table">
+              <thead><tr><th>Timestamp</th><th>Type</th><th>Source</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody>
+                ${r.length === 0 ? '<tr><td colspan="6" style="text-align: center;">No transactions logged.</td></tr>' :
+                  r.map(t => `
+                    <tr>
+                      <td>${formatDate(t.createdAt)}</td>
+                      <td><strong>${t.type}</strong></td>
+                      <td>${t.source}</td>
+                      <td>${t.reference || '-'}</td>
+                      <td style="font-weight: 700;">${formatCurrency(t.amount, t.currency || cur)}</td>
+                      <td><span class="badge ${t.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}">${t.status}</span></td>
+                    </tr>
+                  `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (err) {
+        container.innerHTML = `<div style="color: var(--danger); padding: 1.5rem;">Error loading report: ${err.message}</div>`;
+      }
+    }
+
+    initDates();
+    switchReport('revenue');
+  </script>
+</body>
+</html>

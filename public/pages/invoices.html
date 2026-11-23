@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoices - PayShield B2B Financial Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav id="appSidebar"></nav>
+
+    <main class="app-main">
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+          <div class="page-title-wrap">
+            <h1>Invoices</h1>
+            <p>Issue, track, and protect commercial B2B invoices</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button onclick="openModal()" class="btn btn-primary btn-sm">+ Create Invoice</button>
+          <button onclick="exportInvoicesCSV()" class="btn btn-outline btn-sm">Export CSV</button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <div class="card">
+          <div style="display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by invoice # or client name..." style="max-width: 320px;" onkeyup="filterInvoices()">
+            <select id="statusFilter" class="form-control" style="max-width: 180px;" onchange="filterInvoices()">
+              <option value="">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING">Pending</option>
+              <option value="PARTIAL">Partial</option>
+              <option value="PAID">Paid</option>
+              <option value="OVERDUE">Overdue</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Client</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Due Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="invoicesTableBody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading invoices...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create / Edit Invoice Modal -->
+  <div id="invoiceModal" class="modal">
+    <div class="modal-content" style="max-width: 820px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Create Invoice</h2>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="invoiceForm">
+        <div class="modal-body">
+          <input type="hidden" id="invoiceId">
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label for="invoiceClient">Client *</label>
+              <select id="invoiceClient" class="form-control" required>
+                <option value="">Select Client</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="invoiceDueDate">Due Date</label>
+              <input type="date" id="invoiceDueDate" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="invoiceStatus">Status</label>
+              <select id="invoiceStatus" class="form-control">
+                <option value="PENDING">Pending</option>
+                <option value="DRAFT">Draft</option>
+                <option value="PAID">Paid</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tax Configuration Controls -->
+          <div style="background: var(--surface-secondary); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+            <div>
+              <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Pricing Method</label>
+              <select id="pricingType" class="form-control" style="width: 170px;" onchange="calculateTotals()">
+                <option value="EXCLUSIVE">Tax Exclusive (+16%)</option>
+                <option value="INCLUSIVE">Tax Inclusive (Included)</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">VAT / Tax Rate (%)</label>
+              <input type="number" id="taxRatePercent" class="form-control" style="width: 120px;" value="16" min="0" step="0.5" oninput="calculateTotals()">
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.2rem;">
+              <input type="checkbox" id="taxExempt" onchange="calculateTotals()">
+              <label for="taxExempt" style="margin: 0; font-size: 0.85rem; font-weight: 600;">Tax Exempt (0% VAT)</label>
+            </div>
+          </div>
+
+          <!-- Invoice Line Items -->
+          <div class="form-group">
+            <label style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Invoice Items</span>
+              <button type="button" onclick="addItem()" class="btn btn-outline btn-sm">+ Add Item</button>
+            </label>
+            <div id="invoiceItems" style="margin-top: 0.5rem;">
+              <!-- Dynamic line items -->
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="invoiceNotes">Notes & Payment Instructions</label>
+            <textarea id="invoiceNotes" class="form-control" rows="2" placeholder="Bank details, terms, deliverable shield condition..."></textarea>
+          </div>
+
+          <!-- Financial Calculation Breakdown -->
+          <div style="background: var(--surface-secondary); padding: 1rem 1.25rem; border-radius: var(--radius-md); text-align: right; margin-top: 1rem;">
+            <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+              <span style="color: var(--text-muted);">Subtotal: </span>
+              <strong id="subtotalDisplay">0.00</strong>
+            </div>
+            <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+              <span style="color: var(--text-muted);" id="taxLabel">VAT (16%): </span>
+              <strong id="taxDisplay">0.00</strong>
+            </div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: var(--primary);">
+              <span>Total: </span>
+              <span id="totalDisplay">0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal()" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveInvoiceBtn">Save Invoice</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View & Printable Invoice Modal -->
+  <div id="viewInvoiceModal" class="modal">
+    <div class="modal-content" style="max-width: 850px;">
+      <div class="modal-header no-print">
+        <h2 class="modal-title">Commercial Invoice</h2>
+        <div style="display: flex; gap: 0.5rem;">
+          <button onclick="window.print()" class="btn btn-primary btn-sm">🖨️ Print Invoice</button>
+          <button onclick="closeViewModal()" class="modal-close">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" id="printableInvoiceContainer">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="modal-footer no-print">
+        <button onclick="closeViewModal()" class="btn btn-outline">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script>
+    initAppShell('invoices');
+
+    let allInvoices = [];
+    let allClients = [];
+    let allServices = [];
+
+    async function loadInvoices() {
+      try {
+        const [invRes, clientRes, servRes] = await Promise.all([
+          apiCall('/invoices'),
+          apiCall('/clients'),
+          apiCall('/services')
+        ]);
+        allInvoices = invRes.invoices || [];
+        allClients = clientRes.clients || [];
+        allServices = servRes.services || [];
+
+        const select = document.getElementById('invoiceClient');
+        select.innerHTML = '<option value="">Select Client</option>' +
+          allClients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+        renderInvoices(allInvoices);
+      } catch (err) {
+        console.error('Error loading invoices:', err);
+        showToast(err.message, 'error');
+      }
+    }
+
+    function renderInvoices(invoices) {
+      const tbody = document.getElementById('invoicesTableBody');
+      if (!invoices || invoices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No invoices found. Click "Create Invoice" to issue your first invoice.</td></tr>';
+        return;
+      }
+
+      const cur = getOrganization()?.currency || 'USD';
+
+      tbody.innerHTML = invoices.map(inv => {
+        const clientName = inv.client ? inv.client.name : 'Unknown';
+        const paid = (inv.payments || []).filter(p => p.status === 'COMPLETED').reduce((s, p) => s + p.amount, 0);
+        const statusBadge = inv.status === 'PAID' ? 'badge-success' : inv.status === 'OVERDUE' ? 'badge-danger' : inv.status === 'PARTIAL' ? 'badge-warning' : 'badge-info';
+
+        return `
+          <tr>
+            <td><strong>${inv.invoiceNumber}</strong></td>
+            <td>${clientName}</td>
+            <td><span class="badge ${statusBadge}">${inv.status}</span></td>
+            <td><strong>${formatCurrency(inv.total, inv.currency || cur)}</strong></td>
+            <td style="color: var(--success); font-weight: 600;">${formatCurrency(paid, inv.currency || cur)}</td>
+            <td style="color: ${inv.balance > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight: 600;">${formatCurrency(inv.balance, inv.currency || cur)}</td>
+            <td>${formatDate(inv.dueDate)}</td>
+            <td>
+              <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                <button onclick="viewInvoice('${inv.id}')" class="btn btn-outline btn-sm">View</button>
+                <button onclick="editInvoice('${inv.id}')" class="btn btn-outline btn-sm">Edit</button>
+                ${inv.status !== 'PAID' ? `<a href="/payments?invoiceId=${inv.id}" class="btn btn-success btn-sm">Pay</a>` : ''}
+                <button onclick="deleteInvoice('${inv.id}')" class="btn btn-danger btn-sm">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterInvoices() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const status = document.getElementById('statusFilter').value;
+
+      let filtered = allInvoices;
+      if (q) {
+        filtered = filtered.filter(i => 
+          i.invoiceNumber.toLowerCase().includes(q) || 
+          (i.client && i.client.name.toLowerCase().includes(q))
+        );
+      }
+      if (status) {
+        filtered = filtered.filter(i => i.status === status);
+      }
+      renderInvoices(filtered);
+    }
+
+    function openModal() {
+      const modal = document.getElementById('invoiceModal');
+      const form = document.getElementById('invoiceForm');
+      form.reset();
+      document.getElementById('invoiceId').value = '';
+      document.getElementById('modalTitle').textContent = 'Create Invoice';
+      document.getElementById('pricingType').value = 'EXCLUSIVE';
+      document.getElementById('taxRatePercent').value = '16';
+      document.getElementById('taxExempt').checked = false;
+
+      document.getElementById('invoiceItems').innerHTML = '';
+      addItem();
+      calculateTotals();
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('invoiceModal').classList.remove('active');
+    }
+
+    function addItem(description = '', qty = 1, price = 0) {
+      const container = document.getElementById('invoiceItems');
+      const row = document.createElement('div');
+      row.className = 'invoice-item-row';
+      row.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;';
+      
+      row.innerHTML = `
+        <input type="text" class="form-control item-desc" placeholder="Service or product description" value="${description}" required>
+        <input type="number" class="form-control item-qty" placeholder="Qty" value="${qty}" min="0.01" step="any" required>
+        <input type="number" class="form-control item-price" placeholder="Price" value="${price}" min="0" step="any" required>
+        <input type="text" class="form-control item-total" readonly value="0.00" style="background: var(--surface-secondary); font-weight: 600;">
+        <button type="button" onclick="removeItem(this)" class="btn btn-outline btn-sm" style="color: var(--danger);">&times;</button>
+      `;
+
+      container.appendChild(row);
+      attachItemListeners(row);
+      calculateTotals();
+    }
+
+    function removeItem(btn) {
+      const rows = document.querySelectorAll('.invoice-item-row');
+      if (rows.length > 1) {
+        btn.closest('.invoice-item-row').remove();
+        calculateTotals();
+      } else {
+        showToast('Invoice must have at least one item', 'info');
+      }
+    }
+
+    function attachItemListeners(row) {
+      const qtyInput = row.querySelector('.item-qty');
+      const priceInput = row.querySelector('.item-price');
+      const totalInput = row.querySelector('.item-total');
+
+      function updateRow() {
+        const q = parseFloat(qtyInput.value) || 0;
+        const p = parseFloat(priceInput.value) || 0;
+        totalInput.value = (q * p).toFixed(2);
+        calculateTotals();
+      }
+
+      qtyInput.addEventListener('input', updateRow);
+      priceInput.addEventListener('input', updateRow);
+      updateRow();
+    }
+
+    function calculateTotals() {
+      const rows = document.querySelectorAll('.invoice-item-row');
+      let rawSum = 0;
+      rows.forEach(r => {
+        const q = parseFloat(r.querySelector('.item-qty').value) || 0;
+        const p = parseFloat(r.querySelector('.item-price').value) || 0;
+        rawSum += q * p;
+      });
+
+      const isExempt = document.getElementById('taxExempt').checked;
+      const taxRate = isExempt ? 0 : ((parseFloat(document.getElementById('taxRatePercent').value) || 0) / 100);
+      const pricingType = document.getElementById('pricingType').value;
+
+      let subtotal, tax, total;
+      if (isExempt) {
+        subtotal = rawSum;
+        tax = 0;
+        total = rawSum;
+        document.getElementById('taxLabel').textContent = 'VAT (Exempt): ';
+      } else if (pricingType === 'INCLUSIVE') {
+        total = rawSum;
+        subtotal = total / (1 + taxRate);
+        tax = total - subtotal;
+        document.getElementById('taxLabel').textContent = `VAT Included (${(taxRate * 100).toFixed(0)}%): `;
+      } else {
+        subtotal = rawSum;
+        tax = subtotal * taxRate;
+        total = subtotal + tax;
+        document.getElementById('taxLabel').textContent = `VAT (${(taxRate * 100).toFixed(0)}%): `;
+      }
+
+      const cur = getOrganization()?.currency || 'USD';
+      document.getElementById('subtotalDisplay').textContent = formatCurrency(subtotal, cur);
+      document.getElementById('taxDisplay').textContent = formatCurrency(tax, cur);
+      document.getElementById('totalDisplay').textContent = formatCurrency(total, cur);
+    }
+
+    // Fully working editInvoice function!
+    async function editInvoice(id) {
+      try {
+        const res = await apiCall(`/invoices/${id}`);
+        const inv = res.invoice;
+        if (!inv) return;
+
+        openModal();
+        document.getElementById('invoiceId').value = inv.id;
+        document.getElementById('modalTitle').textContent = `Edit Invoice ${inv.invoiceNumber}`;
+        document.getElementById('invoiceClient').value = inv.clientId;
+        document.getElementById('invoiceStatus').value = inv.status;
+        if (inv.dueDate) {
+          document.getElementById('invoiceDueDate').value = inv.dueDate.split('T')[0];
+        }
+        document.getElementById('invoiceNotes').value = inv.notes || '';
+
+        // Fill line items
+        const container = document.getElementById('invoiceItems');
+        container.innerHTML = '';
+        if (inv.items && inv.items.length > 0) {
+          inv.items.forEach(item => {
+            addItem(item.description, item.quantity, item.unitPrice);
+          });
+        } else {
+          addItem();
+        }
+
+        calculateTotals();
+      } catch (err) {
+        showToast('Error loading invoice: ' + err.message, 'error');
+      }
+    }
+
+    async function saveInvoice(e) {
+      e.preventDefault();
+      const id = document.getElementById('invoiceId').value;
+      const items = [];
+
+      document.querySelectorAll('.invoice-item-row').forEach(r => {
+        items.push({
+          description: r.querySelector('.item-desc').value,
+          quantity: parseFloat(r.querySelector('.item-qty').value) || 1,
+          unitPrice: parseFloat(r.querySelector('.item-price').value) || 0,
+        });
+      });
+
+      const isExempt = document.getElementById('taxExempt').checked;
+      const taxRate = isExempt ? 0 : ((parseFloat(document.getElementById('taxRatePercent').value) || 0) / 100);
+
+      const payload = {
+        clientId: document.getElementById('invoiceClient').value,
+        items,
+        status: document.getElementById('invoiceStatus').value,
+        dueDate: document.getElementById('invoiceDueDate').value || null,
+        notes: document.getElementById('invoiceNotes').value || null,
+        taxExempt: isExempt,
+        taxRate: taxRate,
+        pricingType: document.getElementById('pricingType').value,
+      };
+
+      try {
+        if (id) {
+          await apiCall(`/invoices/${id}`, 'PUT', payload);
+          showToast('Invoice updated successfully', 'success');
+        } else {
+          await apiCall('/invoices', 'POST', payload);
+          showToast('Invoice created successfully', 'success');
+        }
+        closeModal();
+        loadInvoices();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteInvoice(id) {
+      if (!confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) return;
+      try {
+        await apiCall(`/invoices/${id}`, 'DELETE');
+        showToast('Invoice deleted', 'info');
+        loadInvoices();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // View & Printable Invoice
+    async function viewInvoice(id) {
+      try {
+        const res = await apiCall(`/invoices/${id}`);
+        const inv = res.invoice;
+        const org = getOrganization() || { name: 'PayShield Business', currency: 'USD' };
+        const cur = inv.currency || org.currency;
+
+        const container = document.getElementById('printableInvoiceContainer');
+        const paid = (inv.payments || []).filter(p => p.status === 'COMPLETED').reduce((s, p) => s + p.amount, 0);
+
+        container.innerHTML = `
+          <div class="invoice-preview-sheet">
+            <div class="inv-header-row">
+              <div>
+                <div class="inv-brand-h">${org.name}</div>
+                <div style="font-size: 0.85rem; color: #64748b;">Financial Invoice & Deliverable Protection</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="inv-num-tag">${inv.invoiceNumber}</div>
+                <div style="font-size: 0.85rem; color: #64748b;">Issue Date: ${formatDate(inv.createdAt)}</div>
+                <div style="font-size: 0.85rem; color: #64748b;">Due Date: ${formatDate(inv.dueDate)}</div>
+                <span class="badge ${inv.status === 'PAID' ? 'badge-success' : 'badge-warning'}" style="margin-top: 0.5rem;">${inv.status}</span>
+              </div>
+            </div>
+
+            <div class="inv-parties-grid">
+              <div>
+                <div class="inv-section-title">Billed To</div>
+                <div style="font-weight: 700; font-size: 1.05rem;">${inv.client ? inv.client.name : 'Client'}</div>
+                <div style="color: #64748b; font-size: 0.875rem;">${inv.client?.email || ''}</div>
+                <div style="color: #64748b; font-size: 0.875rem;">${inv.client?.phone || ''}</div>
+                <div style="color: #64748b; font-size: 0.875rem;">${inv.client?.address || ''}</div>
+              </div>
+              <div>
+                <div class="inv-section-title">Payee Organization</div>
+                <div style="font-weight: 700; font-size: 1.05rem;">${org.name}</div>
+                <div style="color: #64748b; font-size: 0.875rem;">Currency: ${cur}</div>
+                <div style="color: #64748b; font-size: 0.875rem;">Platform: PayShield B2B</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th style="text-align: center;">Qty</th>
+                    <th style="text-align: right;">Unit Price</th>
+                    <th style="text-align: right;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(inv.items || []).map(item => `
+                    <tr>
+                      <td>${item.description}</td>
+                      <td style="text-align: center;">${item.quantity}</td>
+                      <td style="text-align: right;">${formatCurrency(item.unitPrice, cur)}</td>
+                      <td style="text-align: right; font-weight: 600;">${formatCurrency(item.total, cur)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 2rem;">
+              <div style="width: 280px; background: #f8fafc; padding: 1rem; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; font-size: 0.875rem;">
+                  <span>Subtotal:</span>
+                  <strong>${formatCurrency(inv.subtotal, cur)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                  <span>VAT / Tax:</span>
+                  <strong>${formatCurrency(inv.tax, cur)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid #cbd5e1; font-size: 1.1rem; font-weight: 800; color: #2563eb;">
+                  <span>Total:</span>
+                  <span>${formatCurrency(inv.total, cur)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.875rem; color: #10b981;">
+                  <span>Amount Paid:</span>
+                  <span>${formatCurrency(paid, cur)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.95rem; font-weight: 700; color: ${inv.balance > 0 ? '#ef4444' : '#10b981'};">
+                  <span>Balance Due:</span>
+                  <span>${formatCurrency(inv.balance, cur)}</span>
+                </div>
+              </div>
+            </div>
+
+            ${inv.notes ? `
+              <div style="border-top: 1px solid #e2e8f0; padding-top: 1rem; margin-top: 1rem;">
+                <div class="inv-section-title">Notes & Instructions</div>
+                <p style="font-size: 0.875rem; color: #475569;">${inv.notes}</p>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        document.getElementById('viewInvoiceModal').classList.add('active');
+      } catch (err) {
+        showToast('Error displaying invoice: ' + err.message, 'error');
+      }
+    }
+
+    function closeViewModal() {
+      document.getElementById('viewInvoiceModal').classList.remove('active');
+    }
+
+    function exportInvoicesCSV() {
+      const token = localStorage.getItem('token');
+      window.open(`/api/invoices/export?token=${token}`, '_blank');
+    }
+
+    document.getElementById('invoiceForm').addEventListener('submit', saveInvoice);
+    loadInvoices();
+  </script>
+</body>
+</html>
